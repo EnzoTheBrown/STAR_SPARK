@@ -1,7 +1,5 @@
 from pyspark import SparkContext
-# init spark context
 import numpy as np
-
 sc = SparkContext()
 
 # return une hashmap pour l'index des colonnes du csv
@@ -14,10 +12,7 @@ def readsql(sc, filename):
 	for attribute in data:
 		hashh[attribute] = data.index(attribute) 
 	return hashh
-print("#"*80+"\n\n")
-print("#"*8 + " "*27 +"readSQL done" +" "*27 + "#" *8+"\n\n")
-print("#"*80)
-# retourne : [min_ra, max_ra, min_decl, max_decl]
+
 def getMax(data, sources):
     return data\
         .map(lambda line: (float(line[sources['ra'] + 1]), float(line[sources['ra'] + 1])
@@ -30,18 +25,7 @@ def testGetMax(sc):
     # on test si les resultats sont coherents
     assert [0,1,0,1] == list(map(round, getMax(data, sources))), "getMax not OK"
     print('getMax Ok')
-testGetMax(sc)
 
-# retourne : [(key1, value1), (key2, value2), ...] 
-def getKey(rdd):
-    return rdd.map(lambda l: (l[0], 1))\
-        .reduceByKey(lambda a, b: a+b).collect()
-    
-def testGetKey(sc):
-    testrdd = sc.parallelize([["aaa"]]*10 + [["bbb"]]*15 + [["ccc"]]*10)
-    assert set([("aaa", 10), ("bbb", 15), ("ccc",10)]) == set(getKey(testrdd)), "getKey not OK"
-    print('getKey OK')
-testGetKey(sc)
 
 # retourne les quatres sous-grille d'une grille
 def subGrid(square):
@@ -55,7 +39,7 @@ def subGrid(square):
 
 def cutGrid(a, grid):
     res = grid
-    for k, v in a:
+    for k, v in a.items():
         sg = subGrid(grid[k])
         for i in range(4):
             res[k+str(i)]=sg[i]
@@ -69,17 +53,13 @@ def findsquare(grid, ra, decl):
             return k
     raise ValueError(grid, ra, decl)
 
-
 def saveMap(sources, rdd, seuil):
     a = {}
     rdd = rdd.map(lambda line: ['_'] + line.split(',')).cache()
     grid = {'_':getMax(rdd, sources)}
-    print("#"*80+"\n\n")
-    print("#"*8 + " "*27 +"getMax done" +" "*27 + "#" *8+"\n\n")
-    print("#"*80)
     while True:
-        a = getKey(rdd)
-        a = list(filter(lambda x : x[1] > seuil, a))
+        a = rdd.countByKey()
+        a = {k:v for k,v in a.items() if v > seuil}
         if not len(a):
             break
         #print("grid", grid)
@@ -88,22 +68,22 @@ def saveMap(sources, rdd, seuil):
         rdd = rdd.map(lambda line: [findsquare(grid, float(line[sources['ra'] + 1])
                                            , float(line[sources['decl'] + 1]))]+line[1:])
 
-        print("#"*80+"\n\n")
-        print("#"*8 + " "*27 +"findsquare done" +" "*27 + "#" *8+"\n\n")
-        print("#"*80)
-    keys = rdd.map(lambda line: (line[0], 1)).reduceByKey(lambda a, b: a + b).collect()
+    keys = rdd.countByKey().items()
 
     names = [i[0] for i in keys]
     for name in names:
         rdd.filter(lambda line: line[0] == name)\
-            .map(lambda line: line[1])\
-            .saveAsTextFile('p1206976/'+name+'.csv')
+            .map(lambda line: line[1:])\
+            .saveAsTextFile('p1206976/'+name)
 
     print(keys)
 
+testGetMax(sc)
+testGetKey(sc)
+
 sources = readsql(sc, 'p1206976/schema/Source.sql')
 rdd = sc.textFile('p1206976/Source/Source-001.csv')
-seuil = 10000
+seuil = 7
 saveMap(sources, rdd, seuil)
 
 sc.stop()
