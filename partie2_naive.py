@@ -82,7 +82,7 @@ testGetMax(sc)
 testGetKey(sc)
 
 sources = readsql(sc, 'p1206976/schema/Source.sql')
-rdd = sc.textFile('p1206976/Source/Source-001.csv')
+rdd = sc.textFile('/tp-data/Source/Source-*.csv')
 seuil = 7
 saveMap(sources, rdd, seuil)
 
