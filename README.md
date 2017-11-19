@@ -93,9 +93,10 @@ data = clusters_int.zip(data).countByKey()
 print(data)
 sc.stop()
 ```
+![kmeans result](https://github.com/EnzoTheBrown/bda_spark/blob/master/kmeans.png?raw=true)
 
 ### Conclusion Kmeans:
-L'algorithme donnes des resultats relativement bon car il tend a faire des clusters de même taille. Cependant l'algorithme est relativement complexe et peu scalable pour des grand jeux de donnée.
+L'algorithme donnes des resultats relativement bon car il tend a faire des clusters de même taille.
 
 
 # partie 2 façon naïve
