@@ -130,6 +130,7 @@ def loop2cut(rdd, seuil, sources, grid):
     i = 0
     while i < 10:
         a = {k:v for k,v in rdd.countByKey().items() if v > seuil}
+        rdd = rdd.filter(lambda x: x[0] in a)
         if len(a) > 50:
             break
         print("-"*50,a,"-"*50)
@@ -138,7 +139,6 @@ def loop2cut(rdd, seuil, sources, grid):
         grid = cut(a, grid)
         rdd = rdd.map(lambda line: [findsquare(grid, float(line[sources['ra'] + 1]), float(line[sources['decl'] + 1]))]+line[1:])
         i += 1
-    print(a)
     return rdd
 
 sources = readsql(sc, 'p1206976/schema/Source.sql')
@@ -151,10 +151,8 @@ max_range = getMax(data, sources)
 grid = {'_':max_range}
 rdd = data.map(lambda line: (['_']+ line))
 seuil = int(np.mean(list(map(lambda x: 128000000/sys.getsizeof(x), rdd.take(100)))))
-"""
-On garde rdd2 en mmoire pour les stats:
-"""
-rdd2 = loop2cut(rdd, seuil, sources, grid)
+
+loop2cut(rdd, seuil, sources, grid)
 
 cle = [(k,v) for k,v in rdd.countByKey().items()]
 cle.sort(key = lambda x : x[0])
@@ -175,4 +173,3 @@ rddd = sqlContext.createDataFrame(rdd, ["id_part", "data"])
 #    res += '\n'.join(['ra dans ' + str(x[0]) + ' et decl dans '+str(x[1]) for x in getRange(name,max_range)])
 
 #print(res)
-print(rdd2.countByKey().items())

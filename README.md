@@ -1,3 +1,102 @@
+# partie 1 
+## Objectif:
+Considérons que les données de base sont mélangées dans plusieurs fichiers, nous allons devoir regrouper les donnée en fonction de leur proximité géographique pour par exemple facilité des futurs calculs ou autre.
+
+## Réalisation 1 :
+Le premièr algorithme est simple et peu couteux, nous allons récuperer les coordonnée extrémales de ra et decl pour ensuite en deduire une surface englobant toutes les données.
+``` python
+def getMax(data, sources):
+    return data\
+        .map(lambda line: (float(line[sources['ra'] + 1]), float(line[sources['ra'] + 1])
+                           , float(line[sources['decl'] + 1]), float(line[sources['decl'] + 1])))\
+        .reduce(lambda a, b: [min(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), max(a[3], b[3])])
+```
+
+Maintenant que nous avons notre surface englobante, nous pouvons la découper pour diviser notre jeux de donnée, et garder les données géographiquement liées enssemble:
+```python
+def cutRect(nb_partitions, coords):
+	ra_max = coords[0]
+	ra_min = coords[1]
+	decl_max = coords[2]
+	decl_min = coords[3]
+	ra_step = (ra_max - ra_min)/nb_partitions
+	decl_step = (decl_max - decl_min)/nb_partitions
+	grid=[]
+	for i in range(nb_partitions):
+		tmp = []
+		for j in range(nb_partitions):
+			tmp.append([ra_min + i*ra_step, ra_min + (i+1)*ra_step, 
+                        decl_min + j*decl_step, decl_min +(j+1)*decl_step, str(i)+str(j)])
+		grid += tmp
+	return grid
+```
+
+Nous obtenons ainsi un grille contenant nb_partition² rectangles et chaque rectangle a un identifiant unique.
+
+Maintenant nous pouvons affecter un rectangle à chaque ligne de notre RDD.
+
+```python
+def findsquare(grid, ra, decl):
+    for k, v in grid.items():
+        if ra >= v[0] and ra <= v[1] and decl >= v[2] and decl <= v[3]:
+            return k
+    raise ValueError(grid, ra, decl)
+
+rdd.map(
+    lambda line: [findsquare(
+    grid,
+    float(line[sources['ra'] + 1]),
+    float(line[sources['decl'] + 1]))
+                 ]+line[1:]
+)
+```
+
+Une fois les données affectées à différentes zones géographique, nous pouvons les sauvegarder dans les fichiers correspondant:
+
+```python
+# on récupère le nom de chaque zone
+names = [i[-1] for i in grid]
+print(rdd3.collect())
+for name in names:
+    # pour chaque nom, on sauve les données correspondante dans un fichier csv
+	rdd2.filter(lambda line: line[0] == name)\
+		.map(lambda line: line[1])\
+		.saveAsTextFile('p1206976/'+name)
+```
+
+### Conclusion :
+C'est algorithme simple et peu couteux, mais les zones ne sont pas du tout homogènes.
+
+## Réalisation 2 :
+Le second algorithme est celui des Kmeans, 
+
+```python
+from pyspark import SparkContext
+sc = SparkContext()
+
+from pyspark.mllib.clustering import KMeans, KMeansModel
+from numpy import array
+from math import sqrt
+
+# Load and parse the data
+sources = readsql(sc, 'p1206976/schema/Source.sql')
+data = sc.textFile('/tp-data/Source/Source-001.csv')
+parsedData = data.map(lambda line: array([float(x) for x in (line[sources['ra']], line[sources['decl']])]))
+
+# Build the model (cluster the data)
+clusters = KMeans.train(parsedData, 5, maxIterations=10,
+        runs=10, initializationMode="random")
+
+
+clusters_int = clusters.predict(parsedData)
+data = clusters_int.zip(data).countByKey()
+print(data)
+sc.stop()
+```
+
+### Conclusion Kmeans:
+L'algorithme donnes des resultats relativement bon car il tend a faire des clusters de même taille. Cependant l'algorithme est relativement complexe et peu scalable pour des grand jeux de donnée.
+
 
 # partie 2 façon naïve
 ## objectif: 
@@ -5,128 +104,32 @@ Nous allons appliquer l'algorithme précédent de manière recursive jusqu'à ob
 ![Image of project](https://github.com/EnzoTheBrown/bda_spark/raw/master/algo.png)
 
 
-```python
-from pyspark import SparkContext
-# init spark context
-import numpy as np
-
-sc = SparkContext()
-
-# return une hashmap pour l'index des colonnes du csv
-def readsql(sc, filename):
-	res = sc.textFile(filename)
-	# get the first line
-	header = res.first()
-	data = res.filter(lambda line: line != header).map(lambda line: line.split()[0]).collect()[:-1]
-	hashh = {}
-	for attribute in data:
-		hashh[attribute] = data.index(attribute) 
-	return hashh
-print("#"*80+"\n\n")
-print("#"*8 + " "*27 +"readSQL done" +" "*27 + "#" *8+"\n\n")
-print("#"*80)
-# retourne : [min_ra, max_ra, min_decl, max_decl]
-def getMax(data, sources):
-    return data\
-        .map(lambda line: (float(line[sources['ra'] + 1]), float(line[sources['ra'] + 1])
-                           , float(line[sources['decl'] + 1]), float(line[sources['decl'] + 1])))\
-        .reduce(lambda a, b: [min(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), max(a[3], b[3])])
-
-def testGetMax(sc):
-    sources = {'ra': 5, 'decl': 7}
-    data = sc.parallelize(np.random.rand(8, 100))
-    # on test si les resultats sont coherents
-    assert [0,1,0,1] == list(map(round, getMax(data, sources))), "getMax not OK"
-    print('getMax Ok')
-testGetMax(sc)
-
-# retourne : [(key1, value1), (key2, value2), ...] 
-def getKey(rdd):
-    return rdd.map(lambda l: (l[0], 1))\
-        .reduceByKey(lambda a, b: a+b).collect()
-    
-def testGetKey(sc):
-    testrdd = sc.parallelize([["aaa"]]*10 + [["bbb"]]*15 + [["ccc"]]*10)
-    assert set([("aaa", 10), ("bbb", 15), ("ccc",10)]) == set(getKey(testrdd)), "getKey not OK"
-    print('getKey OK')
-testGetKey(sc)
-
-# retourne les quatres sous-grille d'une grille
-def subGrid(square):
-    xmin, xmax, ymin, ymax = square 
-    return [
-            [xmin, (xmin + xmax)/2, ymin, (ymin + ymax)/2],
-            [(xmin + xmax)/2, xmax, ymin, (ymin + ymax)/2],
-            [(xmin + xmax)/2, xmax, (ymin + ymax)/2, ymax],
-            [xmin, (xmin + xmax)/2, (ymin + ymax)/2, ymax]
-        ]
-
-def cutGrid(a, grid):
-    res = grid
-    for k, v in a:
-        sg = subGrid(grid[k])
-        for i in range(4):
-            res[k+str(i)]=sg[i]
-        res.pop(k)
-    #print("res:", res)
-    return res
-
-def findsquare(grid, ra, decl):
-    for k, v in grid.items():
-        if ra >= v[0] and ra <= v[1] and decl >= v[2] and decl <= v[3]:
-            return k
-    raise ValueError(grid, ra, decl)
+### retourner les extrema d'un rdd
+la fonction getMax :: RDD -> {String:Int} -> (Int, Int, Int, Int) 
+permet de recuperer les mins et les max de ra et decl en fonction d'un rdd et du dictionnaire généré par readsql qui va nous permettre de renvoyer l'index de ra et decl
+#### test
+pour tester la fonction, nous avons generé aléatoirement des lignes et on regarde si les resultats obtenus sont cohérents
 
 
-def saveMap(sources, rdd, seuil):
-    a = {}
-    rdd = rdd.map(lambda line: ['_'] + line.split(',')).cache()
-    grid = {'_':getMax(rdd, sources)}
-    while True:
-        a = getKey(rdd)
-        a = list(filter(lambda x : x[1] > seuil, a))
-        if not len(a):
-            break
-        #print("grid", grid)
-        grid = cutGrid(a, grid)
-        #print("grid", grid)
-        rdd = rdd.map(lambda line: [findsquare(grid, float(line[sources['ra'] + 1])
-                                           , float(line[sources['decl'] + 1]))]+line[1:])
+## opérations sur la grille
+Notre grille est composée de plusieurs carrés, que nous pouvons découpés à loisir pour homogénéïsé la quantité d'information par fichier
 
-    keys = rdd.map(lambda line: (line[0], 1)).reduceByKey(lambda a, b: a + b).collect()
+### description des fonctions
+subSquare :: rect -> (rect, rect, rect, rect)
 
-    names = [i[0] for i in keys]
-    print(rdd.take(1))
-    for name in names:
-        rdd.filter(lambda line: line[0] == name)\
-            .map(lambda line: line[1:])\
-            .saveAsTextFile('/me/p1206976/'+name+'.csv')
+cutGrid :: [(key, value)] -> {key, rect} -> {key, rect}
+regarde chaque rectangle de la grille, appel la fonction subGrid pour le découper.
 
-    print(keys)
+findsquare :: {key, rect} -> float -> float -> key
+determine de quelle rectangle un point (ra, decl) fait partie et renvoit la clé de ce rectangle
+cela nous permet alors d'affecter alors un identifiant à chaque ligne de notre rdd pour ainsi collecter les données géographiquement proche dans le même fichier.
 
-sources = readsql(sc, '/me/p1206976/schema/Source.sql')
-rdd = sc.textFile('/me/p1206976/Source/Source-001.csv')
-seuil = 7
-saveMap(sources, rdd, seuil)
+## itérations sur le rdd
+tant qu'il existe des rectangles de trop grande taille, on continue à les découper et on affecte les lignes du rdd à leur rectangle respectif.
+puis on sauvegarde le tous dans des fichier csv au nom du rectangle.
 
-sc.stop()
+## application sur 5Go de donnée
+Sur le cluster nous avons reussis à faire tourner notre algorithme en moins de 10 minutes et nous avons obtenu les résultats suivant:
+![taille des fichiers](https://github.com/EnzoTheBrown/bda_spark/blob/master/files_spark.png?raw=true)
 
-```
-
-    ################################################################################
-    
-    
-    ########                           readSQL done                           ########
-    
-    
-    ################################################################################
-    getMax Ok
-    getKey OK
-    [['_21', '29710725217517768', '453349688988', '3', 'NULL', 'NULL', '0', '358.08941191498536', '0.0000833115', '0', '3.039583881799817', '0.0000440547', '0', '13195723847569', 'NULL', 'NULL', 'NULL', 'NULL', '358.09409958603084', '0', '3.0181249038638107', '0', 'NULL', 'NULL', '358.09409958603084', '3.0181249038638107', '11.145301519897007', '1.53915', '396.37843658437066', '0.725266', '358.08941191498536', '0.0000833115', '3.039583881799817', '0.0000440547', '358.08941191498536', '3.039583881799817', '50984.37021041665', '15', '748.4060503461875', '162.566', '1602.0987205576666', '412.589', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', '0', '13.7293', '7.78971', '3.56652', '3.58018', '5.5378', '2.02357', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', '0', '0', '0', 'NULL', 'NULL', 'NULL', '1067.139667359477', '3190.48', '2034.2137881244207', '296.163', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', '0', '129', '0']]
-    [('_22', 7), ('_0003', 4), ('_33333330', 4), ('_33333333', 6), ('_21', 3), ('_0000', 5), ('_003', 1)]
-
-
-
-```python
-sc.stop()
-```
+on peut remarquer en regardant le nom des fichiers sur l'axe des y qu'il a fallut autour de 7 itérations de notre algorithme pour regrouper nos données.
