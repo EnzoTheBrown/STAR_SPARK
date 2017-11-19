@@ -116,7 +116,7 @@ def getRange(id_part,range_part):
             yield res[:2],res[2:]
             res = list(id_part)
         else:
-            raise ValueError('erreur dans la découpe', decoupe)
+            raise ValueError('erreur dans la dcoupe', decoupe)
     yield res[:2],res[2:]
 
 def merged_key(key,l_key):
@@ -125,47 +125,54 @@ def merged_key(key,l_key):
             return k
     raise ValueError('pb dans merged_key',key,l_key)
 
+def loop2cut(rdd, seuil, sources, grid):
+    a = {}
+    i = 0
+    while i < 10:
+        a = {k:v for k,v in rdd.countByKey().items() if v > seuil}
+        if len(a) > 50:
+            break
+        print("-"*50,a,"-"*50)
+        if not len(a):
+            break
+        grid = cut(a, grid)
+        rdd = rdd.map(lambda line: [findsquare(grid, float(line[sources['ra'] + 1]), float(line[sources['decl'] + 1]))]+line[1:])
+        i += 1
+    print(a)
+    return rdd
 
-
-sources = readsql(sc, '/me/p1206976/schema/Source.sql')
-rdd = sc.textFile('/me/p1206976/Source/Source-001.csv')
+sources = readsql(sc, 'p1206976/schema/Source.sql')
+rdd = sc.textFile('/tp-data/Source/Source-*.csv')
 data = rdd.map(lambda line: line.split(','))
+
+
+print('m'+'a'*50+'x')
 max_range = getMax(data, sources)
 grid = {'_':max_range}
 rdd = data.map(lambda line: (['_']+ line))
+seuil = int(np.mean(list(map(lambda x: 128000000/sys.getsizeof(x), rdd.take(100)))))
+"""
+On garde rdd2 en mmoire pour les stats:
+"""
+rdd2 = loop2cut(rdd, seuil, sources, grid)
 
-print('m'+'a'*50+'x')
-a = {}
-seuil = 7
-i = 0
-
-while i < 10:
-    a = {k:v for k,v in rdd.countByKey().items() if v > seuil}
-    if len(a) > 50:
-        break
-    print("-"*50,a,"-"*50)
-    if not len(a):
-        break
-    grid = cut(a, grid)
-    rdd = rdd.map(lambda line: [findsquare(grid, float(line[sources['ra'] + 1]), float(line[sources['decl'] + 1]))]+line[1:])
-    i += 1
-print(a)
 cle = [(k,v) for k,v in rdd.countByKey().items()]
 cle.sort(key = lambda x : x[0])
 print("*"*60,cle)
-cle = merge(cle,5)
+cle = merge(cle,100000)
 
-rdd = rdd.map(lambda line: (merged_key(line[0],cle),','.join(line[1:])))
+rddd = rdd.map(lambda line: (merged_key(line[0],cle),','.join(line[1:])))
 print('--'*50,rdd.countByKey())
 sqlContext = SQLContext(sc)
-rdd = sqlContext.createDataFrame(rdd, ["id_part", "data"])
-rdd.write.partitionBy("id_part").text("test4")
+rddd = sqlContext.createDataFrame(rdd, ["id_part", "data"])
+#rdd.write.partitionBy("id_part").text("test4")
 
-# names = rdd.rdd.keys().collect()
-# print(type(names))
-# res = ''
-# for name in names:
-#     res += 'La partition '+ name + 'corespond a\n'
-#     res += '\n'.join(['ra dans ' + str(x[0]) + ' et decl dans '+str(x[1]) for x in getRange(name,max_range)])
+#names = rdd.rdd.keys().collect()
+#print(type(names))
+#res = ''
+#for name in names:
+#    res += 'La partition '+ name + 'corespond a\n'
+#    res += '\n'.join(['ra dans ' + str(x[0]) + ' et decl dans '+str(x[1]) for x in getRange(name,max_range)])
 
-# print(res)
+#print(res)
+print(rdd2.countByKey().items())
