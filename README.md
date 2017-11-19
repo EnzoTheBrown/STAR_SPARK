@@ -3,6 +3,8 @@
 Considérons que les données de base sont mélangées dans plusieurs fichiers, nous allons devoir regrouper les donnée en fonction de leur proximité géographique pour par exemple facilité des futurs calculs ou autre.
 
 ## Réalisation 1 :
+### le code est disponible dans les fichiers partitionement1.py et partie1.py
+
 Le premièr algorithme est simple et peu couteux, nous allons récuperer les coordonnée extrémales de ra et decl pour ensuite en deduire une surface englobant toutes les données.
 ``` python
 def getMax(data, sources):
@@ -68,6 +70,7 @@ for name in names:
 C'est algorithme simple et peu couteux, mais les zones ne sont pas du tout homogènes.
 
 ## Réalisation 2 :
+### le code est disponible dans les fichiers kmeans.py
 Le second algorithme est celui des Kmeans, 
 
 ```python
@@ -100,6 +103,7 @@ L'algorithme donnes des resultats relativement bon car il tend a faire des clust
 
 
 # partie 2 façon naïve
+### le code est disponible dans le fichier partie2_naive.py
 ## objectif: 
 Nous allons appliquer l'algorithme précédent de manière recursive jusqu'à obtenir des rectangles de taille convenable:
 ![Image of project](https://github.com/EnzoTheBrown/bda_spark/raw/master/algo.png)
