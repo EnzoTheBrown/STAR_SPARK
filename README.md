@@ -106,7 +106,7 @@ L'algorithme donnes des resultats relativement bon car il tend a faire des clust
 ### le code est disponible dans le fichier partie2_naive.py
 ## objectif: 
 Nous allons appliquer l'algorithme précédent de manière recursive jusqu'à obtenir des rectangles de taille convenable:
-![Image of project](https://github.com/EnzoTheBrown/bda_spark/raw/master/algo.png)
+![Image of project](https://github.com/EnzoTheBrown/bda_spark/raw/master/algo1.png)
 
 
 ### retourner les extrema d'un rdd
@@ -138,3 +138,9 @@ Sur le cluster nous avons reussis à faire tourner notre algorithme en moins de 
 ![taille des fichiers](https://github.com/EnzoTheBrown/bda_spark/blob/master/files_spark.png?raw=true)
 
 on peut remarquer en regardant le nom des fichiers sur l'axe des y qu'il a fallut autour de 7 itérations de notre algorithme pour regrouper nos données.
+
+# partie 2 façon merge
+Pour homogénéiser la taille des fichiers, nous avons ajouté la fonctionnalité de merge pour fusionner les fichiers de petite taille avec leurs voisins.
+
+## résultats obtenus:
+![taille des fichiers](https://github.com/EnzoTheBrown/bda_spark/blob/master/merge.png?raw=true)
