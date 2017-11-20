@@ -144,3 +144,7 @@ Pour homogénéiser la taille des fichiers, nous avons ajouté la fonctionnalit�
 
 ## résultats obtenus:
 ![taille des fichiers](https://github.com/EnzoTheBrown/bda_spark/blob/master/merge.png?raw=true)
+
+# Conclusion
+Nous avons été confrontés a quelques problèmes, notamment que nous ne disposions pas de la fonction pour écrire dans des fichiers en python et nous devions donc utiliser les fonctionnalités de base qui étaient très lente dans une première version. Nous avons donc utilisés le sqlContext qui était beaucoup plus rapide. 
+De plus, en terme de performance, le python est indéniablement plus lent que sont homologue scala. Mais quand il s'agit de faire des manipulation statistiques ou graphique nous avons des outils bien pratique à notre disposition.
